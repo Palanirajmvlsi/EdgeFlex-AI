@@ -1,0 +1,2 @@
+Model,Implementation,Environment,Peak_Temp_Memory_Bytes,Allocations,Releases,Reuses,Alloc_Failures,Output,Notes
+tinymlp_8_16_12_4,EdgeFlex (dynamic pool),Host (native gcc + ASan/UBSan),112,3,3,1,0,"[-0.1626, 0.1678, 0.0549, -0.2775]",Pool fully drained to 0 bytes after run; peak = worst adjacent-layer pair (L1+L2), not sum of all layers; see Tests/host/test_inference.c

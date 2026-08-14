@@ -1,0 +1,2 @@
+Model,Implementation,Environment,Static_Buffer_Bytes,Allocations,Releases,Reuses,Output,Notes
+tinymlp_8_16_12_4,Baseline (static per-layer buffers),Host (native gcc + ASan/UBSan),128,0,0,0,"[-0.1626, 0.1678, 0.0549, -0.2775]",All 3 layer buffers reserved for the entire program lifetime; no alloc/free calls at all

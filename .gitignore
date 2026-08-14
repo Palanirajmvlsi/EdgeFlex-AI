@@ -1,0 +1,10 @@
+build/
+*.o
+*.d
+*.elf
+*.map
+Tests/host/test_memory
+Tests/host/test_inference
+Tests/host/test_baseline
+*.zip
+.DS_Store
