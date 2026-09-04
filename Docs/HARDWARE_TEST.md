@@ -1,125 +1,199 @@
-# Hardware Test Instructions
+# EdgeFlex AI — STM32F411CEU6 Hardware Implementation
 
-**Physical hardware testing has not yet been performed in this environment.**
-The firmware cross-compiles cleanly (0 errors, 0 warnings) and is
-flash-ready, but every "on-device" number in this project is currently
-`NOT YET MEASURED` until you complete the steps below and send back the
-UART output.
+This document describes the real hardware implementation of EdgeFlex AI on the STM32F411CEU6 Black Pill.
 
-## 1. Required hardware
+## 1. Hardware Used
 
-- STM32 Black Pill (STM32F401CCU6)
-- ST-Link V2 (or compatible) debug probe
-- USB-to-UART adapter (e.g. FTDI/CP2102) — the Black Pill has no onboard USB-serial
-- 4 jumper wires (SWD) + 3 jumper wires (UART) + USB cables
+- **MCU:** STM32F411CEU6 Black Pill
+- **Core:** ARM Cortex-M4 with single-precision FPU
+- **Flash:** 512 KB
+- **SRAM:** 128 KB
+- **Programmer/Debugger:** ST-LINK V2 / compatible SWD probe
+- **Serial interface:** USB-to-TTL UART adapter
+- **Board power:** USB-C 5 V input through the Black Pill board regulator
+- **Application LED:** PC13, active-low on the typical Black Pill board
+- **UART:** USART1 at 115200 baud, 8 data bits, no parity, 1 stop bit
 
-## 2. ST-Link connection (SWD)
+## 2. Hardware Architecture
 
-| ST-Link pin | Black Pill pin |
+```text
+                    +----------------------+
+                    |   STM32F411CEU6      |
+                    |    ARM Cortex-M4     |
+                    |                      |
+ USB-C Power ------>|  3.3 V regulated     |
+                    |                      |
+                    |  PA9  USART1_TX ----+------> USB-TTL RX
+                    |  PA10 USART1_RX <---+------ USB-TTL TX
+                    |                      |
+                    |  PC13 LED ----------> Status LED
+                    |                      |
+                    |  SWDIO <------------+------ ST-LINK SWDIO
+                    |  SWCLK <------------+------ ST-LINK SWCLK
+                    |  GND  <-------------+------ ST-LINK GND
+                    +----------------------+
+```
+
+## 3. ST-LINK / SWD Wiring
+
+| ST-LINK | STM32F411CEU6 |
 |---|---|
-| SWCLK | SWCLK |
-| SWDIO | SWDIO |
+| SWCLK | SWCLK / PA14 |
+| SWDIO | SWDIO / PA13 |
 | GND | GND |
-| 3.3V | 3V3 (optional, if not USB-powering the board separately) |
+| 3.3 V | 3V3 (only when ST-LINK is used as the board power source) |
+| NRST | NRST (optional, recommended for reset/debug recovery) |
 
-## 3. UART connection (USB-to-UART adapter)
+**Do not connect ST-LINK 5 V to the STM32 board.** If the board is powered from USB-C, leave ST-LINK 3.3 V disconnected and share GND.
 
-| Adapter pin | Black Pill pin |
+## 4. USB-TTL UART Wiring
+
+USART1 is implemented on PA9/PA10 in `Core/Src/main.c`.
+
+| USB-TTL | STM32F411CEU6 |
 |---|---|
-| TX | PA10 (USART1 RX) |
-| RX | PA9 (USART1 TX) |
+| TXD | PA10 / USART1_RX |
+| RXD | PA9 / USART1_TX |
 | GND | GND |
+| 3.3 V | Leave disconnected when board is USB-C powered |
+| 5 V | **Do not connect** |
 
-**UART configuration: 115200 baud, 8 data bits, no parity, 1 stop bit (115200 8N1), no flow control.**
+The UART adapter must use **3.3 V logic levels**.
 
-## 4. STM32CubeIDE setup
+## 5. Firmware Hardware Configuration
 
-1. Open STM32CubeIDE.
-2. File -> Import -> C/C++ -> Existing Code as Makefile Project.
-3. Point it at the root of this repository (the folder containing `Makefile` and `STM32F401CCUX_FLASH.ld`).
-4. Toolchain: "Cross GCC" (arm-none-eabi-gcc must be on your PATH, or set the toolchain path in project properties).
+The hardware entry point is `Core/Src/main.c`.
 
-## 5. Build
+At boot the firmware:
 
-Either use CubeIDE's Build button, or from a terminal in the project root:
+1. Initializes STM32 HAL.
+2. Selects the internal 16 MHz HSI clock.
+3. Configures PC13 as the status LED output.
+4. Configures USART1 TX/RX on PA9/PA10 at 115200 8N1.
+5. Enables the Cortex-M4 DWT cycle counter.
+6. Connects DWT timing to the EdgeFlex Performance Monitor.
+7. Initializes the EdgeFlex Dynamic Memory Manager.
+8. Validates and loads the compiled TinyMLP model.
+9. Executes layer-by-layer inference using the EdgeFlex memory pool.
+10. Prints live memory, allocation, reuse, timing, and output information over UART.
+11. Blinks PC13 after inference completes.
+
+## 6. EdgeFlex Runtime on Hardware
+
+```text
+TinyMLP Model
+      |
+      v
++-------------+
+| Model       |
+| Validation  |
++-------------+
+      |
+      v
++-------------+
+| EdgeFlex    |
+| Runtime     |
++-------------+
+      |
+      v
++-------------+
+| Dynamic     |
+| Memory Pool |
++-------------+
+      |
+      v
++-------------+
+| Inference   |
+| Engine      |
++-------------+
+      |
+      v
++-------------+
+| DWT         |
+| Performance |
+| Monitor     |
++-------------+
+      |
+      v
+STM32F411CEU6
+      |
+      +----> UART Performance Report
+      +----> PC13 Status LED
+```
+
+## 7. Build Configuration
+
+The repository is configured for:
+
+- `-mcpu=cortex-m4`
+- `-mthumb`
+- `-mfpu=fpv4-sp-d16`
+- `-mfloat-abi=hard`
+- `-DSTM32F411xE`
+- `STM32F411CEUX_FLASH.ld`
+- `startup_stm32f411xe.s`
+- GNU Arm `arm-none-eabi-gcc`
+
+Build commands:
 
 ```bash
 make clean
 make all
 ```
 
-Confirm the output ends with `0 errors` and check `build/edgeflex_ai.map`
-exists alongside the `.elf`/`.hex`/`.bin`.
+Expected artifacts:
 
-## 6. Flash
-
-Option A — command line:
-```bash
-st-flash write build/edgeflex_ai.bin 0x08000000
+```text
+build/edgeflex_ai.elf
+build/edgeflex_ai.hex
+build/edgeflex_ai.bin
+build/edgeflex_ai.map
 ```
 
-Option B — STM32CubeProgrammer:
+## 8. Flash and Debug
+
+Use STM32CubeIDE with the EdgeFlex project or flash the generated image with STM32CubeProgrammer/ST-LINK.
+
+Example:
+
 ```bash
 STM32_Programmer_CLI -c port=SWD -w build/edgeflex_ai.hex -v -rst
 ```
 
-Option C — STM32CubeIDE's Run/Debug button, using the imported Makefile project's `.elf`.
+## 9. UART Test
 
-## 7. Open a serial terminal
+Open a serial terminal on the USB-TTL adapter at:
 
-Any terminal works (PuTTY, minicom, `screen`, CubeIDE's own terminal view).
-Connect at **115200 8N1** to the COM port / `/dev/ttyUSB*` your UART
-adapter enumerates as.
-
-## 8. Reset
-
-Press the Black Pill's NRST button (or power-cycle it) after the terminal
-is open and connected, so you capture output from the very first line.
-
-## 9. Expected output
-
-```
-=========================================
-     EdgeFlex AI Runtime - STM32F401CCU6
-=========================================
-SystemCoreClock: 16000000 Hz
-Pool size:       4096 bytes
-[INIT] Dynamic Memory Manager initialized.
-[LOAD] Model: tinymlp_8_16_12_4 | Layers: 3 | In: 8 | Out: 4
-[RUN ] Executing layer-by-layer inference...
------------------------------------------
-EdgeFlex AI Runtime - Performance Report
------------------------------------------
-Model:            tinymlp_8_16_12_4
-Layers:           3
-Peak SRAM (pool): 112 bytes
-Current usage:    0 bytes
-Free bytes:       4072 bytes
-Allocations:      3
-Releases:         3
-Reuses:           1
-Alloc failures:   0
-Inference time:   <real ms> ms (<real cycles> cycles)
-Final Output:     [<real>, <real>, <real>, <real>]
------------------------------------------
-[DONE] Copy everything above and send it back for the benchmark log.
+```text
+115200 baud
+8 data bits
+No parity
+1 stop bit
+No flow control
 ```
 
-The onboard LED (PC13) will blink once the report has printed, indicating
-the board is alive and looping.
+Then reset the Black Pill. The firmware reports:
 
-## 10. Values to record
+- MCU/runtime banner
+- System clock
+- EdgeFlex pool size
+- model name and dimensions
+- peak pool usage
+- current/free memory
+- allocation/release/reuse counts
+- allocation failures
+- real DWT cycle count and inference time
+- final model output
 
-Copy the **entire block** between the `====` banner and `[DONE]` line,
-especially:
+## 10. Hardware Validation Status
 
-- `Inference time:` line (the real DWT-measured ms/cycles)
-- `Peak SRAM (pool):`, `Allocations:`, `Releases:`, `Reuses:`
-- `Final Output:` values
+The repository contains the complete target-hardware implementation and wiring documentation. **Do not invent on-device benchmark values.** Record inference timing and final UART values only after running the firmware on the physical STM32F411CEU6 and copy the complete UART report into the benchmark log.
 
-## 11. How to send the result back
+## 11. Safety / Power Notes
 
-Paste the full copied UART output as-is (don't retype or round any
-numbers) back into the conversation. It will be transcribed directly into
-`Benchmarks/results.csv` and `Benchmarks/comparison.md` in place of every
-`NOT YET MEASURED` field, with no numbers estimated or altered.
+- Use a regulated USB-C supply for the Black Pill.
+- Do not feed 5 V into STM32 GPIO pins.
+- USB-TTL TX/RX must be 3.3 V logic.
+- Cross UART connections: adapter TX -> MCU RX and adapter RX -> MCU TX.
+- Always connect a common GND between the STM32 and USB-TTL adapter.
+- Do not power the board simultaneously from conflicting external sources.
