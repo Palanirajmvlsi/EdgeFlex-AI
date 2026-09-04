@@ -1,22 +1,14 @@
-#
-# EdgeFlex AI - STM32F401CCU6 firmware build
-#
-# This is a plain Makefile build (arm-none-eabi-gcc), chosen for
-# reproducibility (works identically in CI and on any machine with the
-# toolchain installed) without requiring STM32CubeIDE itself to be
-# present. STM32CubeIDE can still import this tree as a Makefile /
-# "Existing Code" project - see Docs/HARDWARE_TEST.md.
-#
+# EdgeFlex AI - STM32F411CEU6 firmware build
+# ARM Cortex-M4 / 512 KB Flash / 128 KB SRAM
+
 TARGET      = edgeflex_ai
 BUILD_DIR   = build
-
-CC      = arm-none-eabi-gcc
-OBJCOPY = arm-none-eabi-objcopy
-SIZE    = arm-none-eabi-size
+CC          = arm-none-eabi-gcc
+OBJCOPY     = arm-none-eabi-objcopy
+SIZE        = arm-none-eabi-size
 
 MCU_FLAGS = -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
-
-C_DEFS = -DSTM32F401xC -DUSE_HAL_DRIVER
+C_DEFS = -DSTM32F411xE -DUSE_HAL_DRIVER
 
 C_INCLUDES = \
   -ICore/Inc \
@@ -31,7 +23,7 @@ CFLAGS = $(MCU_FLAGS) $(C_DEFS) $(C_INCLUDES) \
   -ffunction-sections -fdata-sections \
   -Og -g3 -std=gnu11 -MMD -MP
 
-LDSCRIPT = STM32F401CCUX_FLASH.ld
+LDSCRIPT = STM32F411CEUX_FLASH.ld
 LDFLAGS = $(MCU_FLAGS) -specs=nano.specs -specs=nosys.specs \
   -T$(LDSCRIPT) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map \
   -Wl,--gc-sections -Wl,--print-memory-usage
@@ -63,7 +55,7 @@ C_SOURCES = \
   EdgeFlex_Runtime/Src/edgeflex_runtime.c \
   Models/tinymlp_model.c
 
-ASM_SOURCES = Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f401xc.s
+ASM_SOURCES = Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f411xe.s
 
 OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
@@ -71,7 +63,6 @@ vpath %.c $(sort $(dir $(C_SOURCES)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 
 .PHONY: all clean size
-
 all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin size
 
 $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR)
